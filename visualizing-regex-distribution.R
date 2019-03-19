@@ -84,5 +84,10 @@ for (i in seq_along(drug_clean)){
 
 
 
+## reduce document to all FST
+
+FST_only <- depression_data[!depression_data$forcedswimRegex==0, ]
+# 7186
+
 
 
