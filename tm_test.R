@@ -6,7 +6,7 @@ library(tidyverse)
 
 depression_data <- read.csv("~/all_all.csv", sep=",", stringsAsFactors = FALSE)
 
-low_years_full <- filter(depression_data, Year <1800)
+low_years_full <- filter(depression_data, depression_data$Year <1800)
 glimpse(which(depression_data$Year==193))
 #11592
 depression_data$Year[11592]<- 2008
@@ -108,15 +108,91 @@ hist(depression_select$Year)
 
 
 ## load tm packages
+library(tidyverse)
 library(tidytext)
 library(stringr)
 library(caret)
 library(tm)
 
+theme_set(theme_minimal())
+
 
 # turn into tokenized - one word per line
 depression_token <- depression_select %>%
-  unnest_tokens(word, Abstract)
+  unnest_tokens(word, Abstract) 
+
+## From https://cfss.uchicago.edu/text_classification.html#create_document-term_matrix 
+## create tidy: 
+depression_token_tidy <- depression_select %>%
+  unnest_tokens(word, Abstract) %>%
+  # remove numbers
+  filter(!str_detect(word, "^[0-9]*$")) %>%
+  # remove stop words
+  anti_join(stop_words) %>%
+  # stem the words
+  mutate(word = SnowballC::wordStem(word))
+
+depression_dtm <- depression_token_tidy %>%
+  # get count of each token in each document
+  count(depID, word) %>%
+  # create a document-term matrix with all features and tf weighting
+  cast_dtm(document = depID, term = word, value = n)
+
+
+depression_dtm
+
+
+depression_dtm_weight <- depression_token_tidy %>%
+  # get count of each token in each document
+  count(depID, word) %>%
+  # create a document-term matrix with all features and tf weighting
+  cast_dtm(document = depID, term = word, value = n, 
+           weighting = tm::weightTfIdf)
+
+
+depression_dtm_weight
+
+
+
+# remove sparse words
+sparse_depression <- removeSparseTerms(depression_dtm_weight, sparse = .99)
+
+
+#tf-idf
+depression_tfidf <- depression_token_tidy %>%
+  count(depID, word) %>%
+  bind_tf_idf(term = word, document = depID, n = n)
+
+# sort the data frame and convert word to a factor column
+plot_depression <- depression_tfidf %>%
+  arrange(desc(tf_idf))%>%
+  mutate(word = factor(word, levels = rev(unique(word))))
+
+# graph the top 10 tokens for 4 categories
+graph <- plot_depression %>%
+  count(word, sort=TRUE) %>%
+  top_n(20) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot() +
+  geom_col(aes(word, n), fill = my_colors[4]) +
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5),
+        panel.grid.major = element_blank()) +
+  xlab("") + 
+  ylab("Document") +
+  ggtitle("Most Frequently Used Words in Depression Corpus") +
+  coord_flip()
+
+graph
+
+## from https://cfss.uchicago.edu/text_classification.html#estimate_model
+
+depression_rf <- train(x = as.matrix(depression_dtm), 
+                       y = factor(depression_select$depID), 
+                       method = "rf", 
+                       ntree = 200, 
+                       trControl - trainControl(method = "oob"))
 
 
 # remove stopwords
@@ -129,6 +205,9 @@ depression_token %>%
 
 depression_filtered <- depression_token %>%
   distinct()
+
+
+##
 
 
 ## positive and negative words
