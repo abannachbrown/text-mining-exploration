@@ -71,14 +71,32 @@ sankeyNetwork(Links = data_long, Nodes = nodes,
               sinksRight=FALSE, colourScale=ColourScal, nodeWidth=40, fontSize=13, nodePadding=20)
 
 
+
+## https://cran.r-project.org/web/packages/ggalluvial/vignettes/ggalluvial.html
+## https://github.com/mbojan/alluvial 
 ## ggaluviall package
 devtools::install_github("mbojan/alluvial")
+# To have the vignettes build use
+devtools::install_github("mbojan/alluvial", build_vignettes=TRUE, force = TRUE)
+
+
 
 library(alluvial)
+library(tidyvers)
 
-# To have the vignettes build use
-devtools::install_github("mbojan/alluvial", build_vignettes=TRUE)
+tit <- tibble::as_data_frame(Titanic)
+tit %>% head() %>% knitr::kable()
 
+
+graph <- alluvial(
+  select(tit, Survived, Sex, Age, Class),
+  freq=tit$n,
+  col = ifelse(tit$Survived == "Yes", "orange", "grey"),
+  border = ifelse(tit$Survived == "Yes", "orange", "grey"),
+  layer = tit$Survived != "Yes",
+  alpha = 0.8,
+  blocks=FALSE
+)
 
 
 

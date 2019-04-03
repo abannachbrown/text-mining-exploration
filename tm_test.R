@@ -128,9 +128,10 @@ depression_token_tidy <- depression_select %>%
   # remove numbers
   filter(!str_detect(word, "^[0-9]*$")) %>%
   # remove stop words
-  anti_join(stop_words) %>%
+  anti_join(stop_words) 
+#%>%
   # stem the words
-  mutate(word = SnowballC::wordStem(word))
+  # mutate(word = SnowballC::wordStem(word))
 
 depression_dtm <- depression_token_tidy %>%
   # get count of each token in each document
@@ -155,8 +156,8 @@ depression_dtm_weight
 
 
 # remove sparse words
-sparse_depression <- removeSparseTerms(depression_dtm_weight, sparse = .99)
-
+sparse_depression <- removeSparseTerms(depression_dtm, sparse = .99)
+sparse_depression
 
 #tf-idf
 depression_tfidf <- depression_token_tidy %>%
@@ -316,3 +317,65 @@ stats_nounverb <- subset(stats_nounverb, ngram > 1 & freq > 3)
 stats_nounverb$key <- factor(stats_nounverb$keyword, levels = rev(stats_nounverb$keyword))
 barchart(key ~ freq, data = head(stats_nounverb, 20), col = "magenta", 
          main = "Keywords - simple noun phrases", xlab = "Frequency")
+
+
+
+
+
+### Topic Modelling: 
+## https://www.tidytextmining.com/topicmodeling.html#latent-dirichlet-allocation 
+# install.packages("topicmodels") 
+library(topicmodels) 
+
+## data must be in Document Term Matric format with term freq weighting
+## use output from depression_dtm above
+
+dep_lda <- LDA(sparse_depression, k = 3, control = list(seed = 1234))
+dep_lda
+
+
+
+## word-topic probabilities
+dep_topics <- tidy(dep_lda, matrix = "beta")
+dep_topics
+
+dep_top_terms <- dep_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# most common terms within each topic
+dep_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+
+
+## greatest difference in beta
+library(tidyr)
+
+beta_spread <- dep_topics %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  spread(topic, beta) %>%
+  filter(topic1 > .001 | topic2 > .001) %>%
+  mutate(log_ratio = log2(topic2 / topic1))
+
+beta_spread
+
+
+## document - topic probabilities
+dep_docs <- tidy(dep_lda, matrix = "gamma")
+
+dep_docs %>% 
+    arrange(topic, gamma)
+
+ordered_dep_docs <- dep_docs[order(gamma),]
+
+# how many docus from mix of 3 topics: 
+tidy(sparse_depression) %>%
+  filter(document == 6) %>%
+  arrange(desc(count))
